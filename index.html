@@ -125,13 +125,7 @@ var API="/api/music";
 var ARTISTS=["Didi B","Josey","Burna Boy","Tiakola","Fally Ipupa","Tems"];
 var GRADS=[["#1e90ff","#0057d9"],["#00c2ff","#1e5bff"],["#0a3d91","#1e90ff"],["#1a1f3a","#1e90ff"],["#00a3ff","#001f5c"],["#2b6dff","#00e0ff"]];
 var LISTS=[["🔥","Afrobeats"],["💃","Coupé-Décalé"],["🎹","Amapiano"],["🎤","Rap ivoire"],["🪘","Rumba"],["🙏","Gospel"]];
-var FEED=[
- ["🎧 Nouveau son","{a} prépare un nouveau single","Un extrait est attendu cette semaine sur les plateformes d'écoute.","il y a 2 h","#1e90ff"],
- ["🎤 Concert","{a} annonce une date en live","Billetterie ouverte pour un concert prévu ce mois-ci.","il y a 5 h","#00c2ff"],
- ["🎬 Clip","Le clip de {a} cartonne en ligne","Les fans partagent massivement la vidéo sur les réseaux.","hier","#0057d9"],
- ["💬 Interview","{a} se confie sur sa carrière","Une interview revient sur ses débuts et ses projets.","hier","#4b7bff"],
- ["🤝 Collab","{a} en studio avec un autre artiste","Une collaboration surprise pourrait sortir bientôt.","il y a 2 j","#00a3ff"]
-];
+
 var view=document.getElementById("view");
 var favs=[];var UID="";
 try{favs=JSON.parse(localStorage.getItem("favs2")||"[]");}catch(e){favs=[];}
@@ -183,15 +177,37 @@ function listen(a,apple){
   return w;
 }
 
-function newsCard(a,x,withWho){
-  var c=el("div","card"+(withWho?" click":""));c.style.setProperty("--c",x[4]);
-  if(withWho){var w=el("div","who");w.appendChild(avatar(a.name,28));w.appendChild(el("span","",a.name));c.appendChild(w);}
-  var top=el("div","top");top.appendChild(el("span","type",x[0]));top.appendChild(el("span","",x[3]));c.appendChild(top);
-  c.appendChild(el("h3","",x[1].split("{a}").join(a.name)));
-  c.appendChild(el("p","",x[2]));
-  c.appendChild(el("div","src","Exemple de démonstration"));
-  if(withWho)c.onclick=function(){tab(1);artist(a);};
+function ago(d){
+  if(!d)return "";
+  var m=Math.round((Date.now()-new Date(d).getTime())/60000);
+  if(isNaN(m)||m<0)return "";
+  if(m<60)return "il y a "+Math.max(m,1)+" min";
+  var h=Math.round(m/60);if(h<24)return "il y a "+h+" h";
+  var j=Math.round(h/24);if(j===1)return "hier";if(j<31)return "il y a "+j+" j";
+  return "";
+}
+function newsItem(it,a,withWho){
+  var c=el("div","card click");c.style.setProperty("--c","#1e90ff");
+  if(withWho&&a){
+    var w=el("div","who");w.appendChild(pic(a,28));w.appendChild(el("span","",a.name));
+    w.onclick=function(ev){ev.stopPropagation();tab(1);artist(a);};c.appendChild(w);
+  }
+  var top=el("div","top");top.appendChild(el("span","type","📰 "+(it.source||"Actualité")));top.appendChild(el("span","",ago(it.date)));c.appendChild(top);
+  c.appendChild(el("h3","",it.title));
+  c.appendChild(el("div","src","Lire l'article ↗"));
+  c.onclick=function(){window.open(it.link,"_blank","noopener");};
   return c;
+}
+function loadNews(names,box,withWho,max){
+  box.innerHTML="";box.appendChild(el("div","err","Chargement des actualités…"));
+  Promise.all(names.map(function(a){
+    return jget("/api/news?q="+enc(a.name)).then(function(d){return (d.items||[]).map(function(it){return {it:it,a:a};});}).catch(function(){return [];});
+  })).then(function(lists){
+    var all=[].concat.apply([],lists).sort(function(x,y){return new Date(y.it.date||0)-new Date(x.it.date||0);});
+    box.innerHTML="";
+    if(!all.length){box.appendChild(el("div","err","Aucune actualité récente trouvée pour le moment."));return;}
+    all.slice(0,max).forEach(function(o){box.appendChild(newsItem(o.it,o.a,withWho));});
+  });
 }
 
 function home(){
@@ -218,8 +234,8 @@ function home(){
   });
   view.appendChild(hs);
   view.appendChild(el("h2","sec","🔥 À la une"));
-  view.appendChild(el("div","err","Les actualités ci-dessous sont des exemples. La recherche d'actualités par l'IA sera ajoutée ensuite."));
-  [[0,0],[1,1],[2,2],[3,3],[4,4],[5,0]].forEach(function(o){view.appendChild(newsCard(objs[o[0]],FEED[o[1]],true));});
+  var nbox=el("div");view.appendChild(nbox);
+  loadNews(objs,nbox,true,12);
 }
 
 var timer=null;
@@ -278,8 +294,8 @@ function artist(a){
     });
     body.appendChild(el("div","err","Extraits de 30 secondes fournis par Deezer. Pour écouter en entier, utilisez les boutons ci-dessus."));
     body.appendChild(el("h2","sec","Actualités de "+a.name));
-    body.appendChild(el("div","err","Exemples de démonstration."));
-    FEED.forEach(function(x){body.appendChild(newsCard(a,x,false));});
+    var nb=el("div");body.appendChild(nb);
+    loadNews([a],nb,false,10);
   }).catch(function(){
     body.innerHTML="";body.appendChild(listen(a,null));body.appendChild(el("div","err","Les titres n'ont pas pu être chargés."));
   });
