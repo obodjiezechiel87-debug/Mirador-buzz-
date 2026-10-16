@@ -66,6 +66,15 @@ nav button.on{color:#1e90ff}
 .trk .cv{object-fit:cover}
 .trk .ph{margin:0}
 .err{color:var(--mut);font-size:14px;padding:8px 2px}
+.clip{margin-bottom:14px}
+.cbox{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--bd);cursor:pointer}
+.cbox img,.cbox iframe{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
+.cbox .go{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:rgba(30,144,255,.92);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;padding-left:4px}
+.cbox .tag{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.75);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px}
+.clip .ct{font-size:14px;font-weight:700;margin:8px 2px 2px}
+.clip .cl{display:inline-block;font-size:13px;color:#1e90ff;font-weight:700;margin:0 2px 4px;text-decoration:none}
+.yt{display:block;text-align:center;text-decoration:none;color:#fff;font-weight:700;font-size:15px;padding:13px 16px;border-radius:14px;background:#e62117}
+
 #mp{display:none}
 
 .brand{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
@@ -210,6 +219,54 @@ function loadNews(names,box,withWho,max){
   });
 }
 
+var CLIP_START=20,CLIP_LEN=30;
+function ytSearchBtn(a,label){
+  var x=el("a","yt",label||("▶️ Voir les clips de "+a.name+" sur YouTube"));
+  x.href="https://www.youtube.com/results?search_query="+enc(a.name+" clip officiel");x.target="_blank";x.rel="noopener noreferrer";return x;
+}
+function clipItem(v,a){
+  var w=el("div","clip");
+  if(a){var who=el("div","who");who.appendChild(pic(a,28));who.appendChild(el("span","",a.name));who.onclick=function(){tab(1);artist(a);};w.appendChild(who);}
+  var box=el("div","cbox");
+  var im=document.createElement("img");im.src=v.thumb;im.alt="";im.loading="lazy";box.appendChild(im);
+  box.appendChild(el("div","go","▶"));box.appendChild(el("div","tag","Extrait "+CLIP_LEN+" s"));
+  box.onclick=function(){
+    if(au&&!au.paused){au.pause();pp.textContent="▶";}
+    box.innerHTML="";box.onclick=null;
+    var f=document.createElement("iframe");
+    f.src="https://www.youtube-nocookie.com/embed/"+v.id+"?autoplay=1&playsinline=1&rel=0&modestbranding=1&start="+CLIP_START+"&end="+(CLIP_START+CLIP_LEN);
+    f.allow="autoplay; encrypted-media; picture-in-picture";f.allowFullscreen=true;f.title=v.title;
+    box.appendChild(f);
+  };
+  w.appendChild(box);w.appendChild(el("div","ct",v.title));
+  var l=el("a","cl","Voir le clip en entier sur YouTube ↗");
+  l.href="https://www.youtube.com/watch?v="+v.id;l.target="_blank";l.rel="noopener noreferrer";w.appendChild(l);
+  return w;
+}
+function loadNewClips(list,box){
+  box.innerHTML="";box.appendChild(el("div","err","Chargement des nouveaux clips…"));
+  Promise.all(list.slice(0,8).map(function(a){
+    return jget("/api/clips?new=1&q="+enc(a.name)).then(function(d){
+      return (d.items||[]).slice(0,2).map(function(v){return {v:v,a:a};});
+    }).catch(function(){return [];});
+  })).then(function(lists){
+    var all=[].concat.apply([],lists).sort(function(x,y){return new Date(y.v.date||0)-new Date(x.v.date||0);});
+    box.innerHTML="";
+    if(!all.length){box.appendChild(el("div","err","Pas de nouveau clip pour le moment."));return;}
+    all.slice(0,6).forEach(function(o){box.appendChild(clipItem(o.v,o.a));});
+  });
+}
+function loadClips(a,box){
+  box.innerHTML="";box.appendChild(el("div","err","Chargement des clips…"));
+  jget("/api/clips?q="+enc(a.name)).then(function(d){
+    box.innerHTML="";
+    var items=d.items||[];
+    if(!items.length){box.appendChild(ytSearchBtn(a));return;}
+    items.slice(0,4).forEach(function(v){box.appendChild(clipItem(v));});
+    box.appendChild(ytSearchBtn(a,"▶️ Plus de clips sur YouTube"));
+  }).catch(function(){box.innerHTML="";box.appendChild(ytSearchBtn(a));});
+}
+
 function home(){
   view.innerHTML="";
   view.appendChild(el("h2","sec","Pour vous"));
@@ -233,6 +290,11 @@ function home(){
     }).catch(function(){});
   });
   view.appendChild(hs);
+  if(favs.length){
+    view.appendChild(el("h2","sec","🎬 Nouveaux clips de vos artistes"));
+    var cbx=el("div");view.appendChild(cbx);
+    loadNewClips(favs,cbx);
+  }
   view.appendChild(el("h2","sec","🔥 À la une"));
   var nbox=el("div");view.appendChild(nbox);
   loadNews(objs,nbox,true,12);
@@ -293,6 +355,9 @@ function artist(a){
       r.onclick=function(){playTrack(t,a.name);};body.appendChild(r);
     });
     body.appendChild(el("div","err","Extraits de 30 secondes fournis par Deezer. Pour écouter en entier, utilisez les boutons ci-dessus."));
+    body.appendChild(el("h2","sec","Clips de "+a.name));
+    var cb=el("div");body.appendChild(cb);
+    loadClips(a,cb);
     body.appendChild(el("h2","sec","Actualités de "+a.name));
     var nb=el("div");body.appendChild(nb);
     loadNews([a],nb,false,10);
