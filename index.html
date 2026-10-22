@@ -109,6 +109,14 @@ body:not(.out) #auth{display:none}
 .ao{color:#4ade80;font-size:14px;margin:2px 0 6px}
 .af{display:block;text-align:right;color:#1e90ff;font-size:14px;margin:6px 0 0}
 .an{color:var(--mut);font-size:12px;text-align:center;margin-top:16px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;margin-bottom:4px}
+.chip{flex:0 0 auto;background:var(--card);color:var(--mut);border:1px solid var(--bd);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.chip.on{background:linear-gradient(135deg,#1e90ff,#0057d9);color:#fff;border-color:transparent}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+.stats span{background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:6px 12px;font-size:13px;color:var(--tx)}
+.crk{width:26px;text-align:center;font-weight:800;color:#1e90ff;flex:0 0 auto}
+.sel{width:100%;margin:0 0 10px;padding:11px;border-radius:14px;background:var(--card);color:var(--tx);border:1px solid var(--bd);font-size:15px}
+.note{font-size:12px;color:var(--mut);margin:8px 2px 14px}
 </style>
 </head>
 <body class="out">
@@ -134,6 +142,7 @@ body:not(.out) #auth{display:none}
 <nav>
   <button id="n0" class="on"><span>🏠</span>Accueil</button>
   <button id="n1"><span>🔍</span>Recherche</button>
+  <button id="n3"><span>🏆</span>Classements</button>
   <button id="n2"><span>📚</span>Bibliothèque</button>
 </nav>
 <script>
@@ -147,7 +156,7 @@ var favs=[];var UID="";
 try{favs=JSON.parse(localStorage.getItem("favs2")||"[]");}catch(e){favs=[];}
 function saveF(){try{localStorage.setItem("favs2_"+UID,JSON.stringify(favs));}catch(e){}}
 function isFav(a){return favs.some(function(f){return f.id===a.id;});}
-function toggleFav(a){var i=-1;favs.forEach(function(f,k){if(f.id===a.id)i=k;});if(i>-1)favs.splice(i,1);else favs.push({id:a.id,name:a.name,picture:a.picture,link:a.link});saveF();}
+function toggleFav(a){var i=-1;favs.forEach(function(f,k){if(f.id===a.id)i=k;});if(i>-1)favs.splice(i,1);else favs.push({id:a.id,name:a.name,picture:a.picture,link:a.link});saveF();try{if(window.MB){if(i>-1)MB.unfollow(a);else MB.follow(a);}}catch(e){}}
 function g(n){var h=0;for(var i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))%GRADS.length;return GRADS[h];}
 function grad(n){var x=g(n);return "linear-gradient(135deg,"+x[0]+","+x[1]+")";}
 function ini(n){var p=n.trim().split(/\s+/);return (p[0][0]+(p[1]?p[1][0]:"")).toUpperCase();}
@@ -274,8 +283,28 @@ function loadClips(a,box){
   }).catch(function(){box.innerHTML="";box.appendChild(ytSearchBtn(a));});
 }
 
+var dip=null;
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dip=e;});
+window.addEventListener("appinstalled",function(){dip=null;});
+function isStandalone(){return (window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;}
+function installCard(){
+  if(isStandalone())return null;
+  var c=el("div","card");c.style.setProperty("--c","#1e90ff");
+  c.appendChild(el("h3","","📲 Installer Mirador Buzz"));
+  c.appendChild(el("p","","Ajoutez l'application sur votre écran d'accueil, sans passer par le navigateur."));
+  var b=el("button","btn","Télécharger l'application");b.style.background="#1e90ff";b.style.color="#fff";
+  var help=el("div","err","");
+  b.onclick=function(){
+    if(dip){dip.prompt();dip.userChoice.then(function(){dip=null;});return;}
+    if(/iphone|ipad|ipod/i.test(navigator.userAgent))help.textContent="Sur iPhone : touchez Partager (le carré avec une flèche), puis « Sur l'écran d'accueil ».";
+    else help.textContent="Touchez le menu ⋮ de votre navigateur, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
+  };
+  c.appendChild(b);c.appendChild(help);return c;
+}
+
 function home(){
   view.innerHTML="";
+  var ic=installCard();if(ic)view.appendChild(ic);
   view.appendChild(el("h2","sec","Pour vous"));
   var gr=el("div","grid");
   LISTS.forEach(function(l,i){
@@ -344,12 +373,20 @@ function artist(a){
   var box=el("div");box.appendChild(el("h2","",a.name));
   var f=el("button","btn");
   function lab(){f.textContent=isFav(a)?"⭐ Suivi":"+ Suivre";}
-  f.onclick=function(){toggleFav(a);lab();};lab();
+  f.onclick=function(){var was=isFav(a);toggleFav(a);lab();if(S.n!==null){S.n=Math.max(0,S.n+(was?-1:1));drawStats();}};lab();
   box.appendChild(f);hero.appendChild(box);res.appendChild(hero);
+  var S={n:null,f:null};var st=el("div","stats");res.appendChild(st);
+  function fmt(n){try{return Number(n).toLocaleString("fr-FR");}catch(e){return String(n);}}
+  function drawStats(){
+    st.innerHTML="";
+    if(S.n!==null)st.appendChild(el("span","","👥 "+fmt(S.n)+" abonné"+(S.n>1?"s":"")+" sur Mirador Buzz"));
+    if(S.f)st.appendChild(el("span","","💙 "+fmt(S.f)+" fans sur Deezer"));
+  }
+  if(window.MB)MB.count(a.id).then(function(n){S.n=n;drawStats();});
   var body=el("div");body.appendChild(el("div","empty","Chargement…"));res.appendChild(body);
   window.scrollTo(0,0);
   jget(API+"?id="+a.id+"&name="+enc(a.name)).then(function(d){
-    body.innerHTML="";
+    body.innerHTML="";S.f=d.fans;drawStats();
     body.appendChild(el("h2","sec","Écouter "+a.name));
     body.appendChild(listen(a,d.apple));
     body.appendChild(el("h2","sec","Titres populaires"));
@@ -385,18 +422,93 @@ function lib(){
   });
 }
 
+var CH={src:"apple",cc:"ci",genre:"Tous",dz:0,dzg:null};
+var COUNTRIES=[["ci","🇨🇮 Côte d'Ivoire"],["sn","🇸🇳 Sénégal"],["ng","🇳🇬 Nigeria"],["gh","🇬🇭 Ghana"],["cm","🇨🇲 Cameroun"],["ml","🇲🇱 Mali"],["bf","🇧🇫 Burkina Faso"],["bj","🇧🇯 Bénin"],["tg","🇹🇬 Togo"],["cd","🇨🇩 RD Congo"],["ga","🇬🇦 Gabon"],["za","🇿🇦 Afrique du Sud"],["ke","🇰🇪 Kenya"],["fr","🇫🇷 France"],["us","🇺🇸 États-Unis"]];
+function chips(opts,cur,on){
+  var w=el("div","chips");
+  opts.forEach(function(o){var b=el("button","chip"+(String(o[0])===String(cur)?" on":""),o[1]);b.onclick=function(){on(o[0]);};w.appendChild(b);});
+  return w;
+}
+function crow(rank,title,sub,img){
+  var r=el("div","trk");r.appendChild(el("div","crk",String(rank)));
+  var cv=document.createElement("img");cv.className="cv";cv.src=img||"";cv.alt="";cv.loading="lazy";r.appendChild(cv);
+  var tx=el("div");tx.appendChild(el("b","",title));tx.appendChild(el("small","",sub));r.appendChild(tx);
+  return r;
+}
+function charts(){
+  view.innerHTML="";view.appendChild(el("h2","sec","🏆 Classements"));
+  view.appendChild(chips([["apple","Apple Music"],["deezer","Deezer"],["spotify","Spotify"],["amazon","Amazon Music"]],CH.src,function(v){CH.src=v;charts();}));
+  var box=el("div");view.appendChild(box);
+  if(CH.src==="apple")chartApple(box);else if(CH.src==="deezer")chartDeezer(box);else chartLink(box);
+}
+function chartApple(box){
+  var sel=document.createElement("select");sel.className="sel";
+  COUNTRIES.forEach(function(c){var o=document.createElement("option");o.value=c[0];o.textContent=c[1];sel.appendChild(o);});
+  sel.value=CH.cc;sel.onchange=function(){CH.cc=sel.value;CH.genre="Tous";charts();};box.appendChild(sel);
+  var out=el("div");box.appendChild(out);out.appendChild(el("div","err","Chargement…"));
+  jget("/api/charts?source=apple&country="+CH.cc).then(function(d){
+    var items=d.items||[];
+    if(!items.length){out.innerHTML="";out.appendChild(el("div","err","Classement Apple Music indisponible pour ce pays. Essayez un autre pays."));return;}
+    var cnt={};items.forEach(function(it){(it.genres||[]).forEach(function(g){cnt[g]=(cnt[g]||0)+1;});});
+    var gs=Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a];}).slice(0,8);
+    function draw(){
+      out.innerHTML="";
+      out.appendChild(chips([["Tous","Tous les styles"]].concat(gs.map(function(g){return [g,g];})),CH.genre,function(v){CH.genre=v;draw();}));
+      var list=items.filter(function(it){return CH.genre==="Tous"||(it.genres||[]).indexOf(CH.genre)>-1;}).slice(0,30);
+      if(!list.length)out.appendChild(el("div","err","Aucun titre dans ce style."));
+      list.forEach(function(it,k){
+        var sub=it.artist+(CH.genre==="Tous"?"":" · n°"+it.rank+" du pays");
+        var r=crow(k+1,it.title,sub,it.cover);r.onclick=function(){window.open(it.url,"_blank","noopener");};out.appendChild(r);
+      });
+      out.appendChild(el("div","note","Source : Apple Music, titres les plus écoutés du pays. Touchez un titre pour l'ouvrir dans Apple Music."));
+    }
+    draw();
+  }).catch(function(){out.innerHTML="";out.appendChild(el("div","err","Le classement n'a pas pu être chargé."));});
+}
+function chartDeezer(box){
+  var out=el("div");box.appendChild(out);out.appendChild(el("div","err","Chargement…"));
+  function load(){
+    jget("/api/charts?source=deezer&genre="+CH.dz).then(function(d){
+      out.innerHTML="";
+      out.appendChild(chips([[0,"Tous les styles"]].concat((CH.dzg||[]).map(function(g){return [g.id,g.name];})),CH.dz,function(v){CH.dz=v;out.innerHTML="";out.appendChild(el("div","err","Chargement…"));load();}));
+      var items=d.items||[];
+      if(!items.length)out.appendChild(el("div","err","Aucun titre pour ce style."));
+      items.slice(0,30).forEach(function(t){
+        var r=crow(t.rank,t.title,t.artist||"",t.cover);r.onclick=function(){playTrack({title:t.title,preview:t.preview,cover:t.cover,link:t.link},t.artist||"");};out.appendChild(r);
+      });
+      out.appendChild(el("div","note","Source : classement Deezer par style, au niveau mondial. Touchez un titre pour écouter un extrait de 30 secondes."));
+    }).catch(function(){out.innerHTML="";out.appendChild(el("div","err","Le classement n'a pas pu être chargé."));});
+  }
+  if(CH.dzg){load();return;}
+  jget("/api/charts?source=deezer&list=genres").then(function(g){
+    CH.dzg=(g.genres||[]).filter(function(x){return x.id!==0;});load();
+  }).catch(function(){CH.dzg=[];load();});
+}
+function chartLink(box){
+  var sp=CH.src==="spotify";
+  var c=el("div","card");c.style.setProperty("--c",sp?"#1db954":"#25d1da");
+  c.appendChild(el("h3","",sp?"Spotify":"Amazon Music"));
+  c.appendChild(el("p","",sp?"Spotify ne partage pas ses classements avec les applications comme Mirador Buzz. Vous pouvez consulter les classements officiels par pays sur le site Spotify Charts (une connexion Spotify peut être demandée).":"Amazon Music ne partage pas ses classements avec les applications comme Mirador Buzz. Vous pouvez les consulter directement dans Amazon Music."));
+  var b=el("button","btn",sp?"Ouvrir Spotify Charts":"Ouvrir Amazon Music");b.style.background="#1e90ff";b.style.color="#fff";
+  b.onclick=function(){window.open(sp?"https://charts.spotify.com/home":"https://music.amazon.com/","_blank","noopener");};
+  c.appendChild(b);box.appendChild(c);
+  box.appendChild(el("div","note","Pour des chiffres réels par pays et par style, utilisez les onglets Apple Music et Deezer."));
+}
+
 function tab(i){
-  for(var k=0;k<3;k++)document.getElementById("n"+k).className=k===i?"on":"";
-  if(i===0)home();else if(i===1)search();else lib();
+  for(var k=0;k<4;k++)document.getElementById("n"+k).className=k===i?"on":"";
+  if(i===0)home();else if(i===1)search();else if(i===3)charts();else lib();
   window.scrollTo(0,0);
 }
 document.getElementById("n0").onclick=function(){tab(0);};
 document.getElementById("n1").onclick=function(){tab(1);};
 document.getElementById("n2").onclick=function(){tab(2);};
-window.startApp=function(uid){UID=uid;try{favs=JSON.parse(localStorage.getItem("favs2_"+uid)||"[]");}catch(e){favs=[];}tab(0);};
+document.getElementById("n3").onclick=function(){tab(3);};
+window.startApp=function(uid){UID=uid;try{favs=JSON.parse(localStorage.getItem("favs2_"+uid)||"[]");}catch(e){favs=[];}try{if(window.MB)favs.forEach(function(a){MB.follow(a);});}catch(e){}tab(0);};
 window.stopApp=function(){au.pause();mp.style.display="none";};
 </script>
 <script type="module" src="auth.js"></script>
+<script type="module" src="social.js"></script>
 <script>
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});}
 </script>
